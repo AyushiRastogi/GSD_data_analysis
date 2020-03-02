@@ -1,0 +1,314 @@
+---
+title: "Survey analysis"
+output: pdf_document
+---
+
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+# Packages required
+if(!require("dplyr")) install.packages("dplyr")
+if(!require("knitr")) install.packages("knitr")
+if(!require("reshape")) install.packages("reshape")
+if(!require("ggplot2")) install.packages("ggplot2")
+if(!require("forcats")) install.packages("forcats")
+my_packages<-c("dplyr","knitr","reshape","ggplot2","forcats")
+lapply(my_packages, library, character.only = TRUE)
+
+percentage_distribution <-function(dat){
+return(round(prop.table(table(dat),2)*100,0))
+}
+
+setwd("~/Desktop/DA")  # set current working directory
+
+data<-read.csv("responses.csv",header=T,stringsAsFactors=T,na.strings = c(""," ")) # import file with headers and set strings as factors
+
+## Cleaning
+# Select a subset of responses deemed relevant and rename it
+data<-data[c(1,3:10,15:21,54:59,75:78,80,82,2)]
+names(data)<-c("response.id","motivation.full.time.job","motivation.hobby","motivation.volunteer.for.free",
+               "motivation.learn.something.new","motivation.school","motivation.help.get.job",
+               "motivation.meet.new.people","motivation.get.paid",
+               "frequency.contribution",
+               "selection.how.software.is.build","selection.project.goal.align",
+               "selection.friends.contribute","selection.project.welcoming",
+               "selection.easy.to.join","selection.saw.on.social.media",
+               "continue.interaction.with.welcoming.contributors","continue.connects.with.people.worldwide",
+               "continue.low.stress.levels","continue.exciting.tasks","continue.challenging.tasks",
+               "continue.being.paid","important.same.geographic.region","challenging.speak.different.language",
+               "helpful.translation.tools","important.same.gender.identity","gender","region","country")
+#View(data)
+# Remove empty responses
+data<-data[!apply(is.na(data[,-c(1,29)]), 1, all),] # Remove empty rows excluding response ID and country information derived from the survey
+```
+
+## Demographic distribution of participants
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+data$gender<-ordered(data$gender,levels=c("Man","Woman","Prefer not to disclose",NA))
+levels(data$gender)<-c("Man","Woman",NA)
+
+data$region<-factor(sub("[[:lower:]].\t","",data$region)) # removing extraneous text
+
+# Combine regions into broader category - level 1
+data$regionl1<-data$region
+data$regionl<-data$region
+levels(data$regionl)<-c("Oceania","Oceania","Asia","Asia","Europe","Americas","Africa","Americas","Europe",NA,"Asia","Asia","Europe","Africa","Asia","Europe") 
+data$regionl<-ordered(data$regionl,levels=c("Europe","Asia","Americas","Africa","Oceania"))
+
+levels(data$regionl1)<-c(NA,NA,"Asia","Asia","Europe","Americas","Africa","Americas","Europe",NA,"Asia","Asia","Europe","Africa","Asia","Europe") # Oceania is also assigned NA since we have insufficient responses from the region
+data$regionl1<-ordered(data$regionl1,levels=c("Europe","Asia","Americas","Africa"))
+```
+
+What is the gender distribution of responses? We have approximately 4:1 responses from men versus women.
+```{r}
+chisq.test(table(data$gender))
+summary(data$gender)
+```
+
+What is the regional distribution of responses? We balanced the distribution of survey requests across regions, nonetheless developers from some regions where more responsive compared to others. We received at least 10 responses from each region, except Oceania. 
+```{r}
+chisq.test(table(data$regionl))
+summary(data$regionl)
+```
+
+For statistical analysis, we selected all regions except Oceania. 
+```{r}
+chisq.test(table(data$regionl1))
+summary(data$regionl1)
+```
+
+Region and gender distribution of the respondents
+```{r}
+table(data[,c("regionl1","gender")])
+```
+
+Is there a pattern in the distribution of men and women across regions? No. 
+```{r}
+chisq.test(table(data[,c("regionl1","gender")])) 
+```
+
+## Motivation of developers working in open source software project
+Developers primarily work on open source software projects for hobby, volunteer for free, to learn something new, or as a full time job. Other less prominent factors are getting a job, meet people, for university or school and get paid.
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+motivation<-data[,c(2:9,27,30)]
+motivation<-melt(motivation, id=c("regionl1","gender"),na.rm=T)[,c(1,2,4)]
+```
+
+```{r, echo=F}
+dat<-motivation
+levels(dat$value)<-c("full time job","hobby","volunteer/free","learn new","university","get a job","meet people","get paid")
+ggplot(data=dat, aes(x=fct_infreq(value))) +
+geom_bar() + xlab("") +
+geom_text(stat='count', aes(label=..count..), vjust=-0.4) +
+theme(axis.text.x = element_text(angle = 45))
+
+```
+
+Does the motivation vary across gender? No.
+```{r}
+percentage_distribution(motivation[,c("value","gender")])
+lapply(1:8,function(i){chisq.test(percentage_distribution(motivation[,c("value","gender")])[i,])})
+#lapply(1:8,function(i){chisq.test(table(motivation[,c("value","gender")])[i,])}) # for actual values; not representative of the actual distribution
+```
+
+Does the motivation vary across regions?
+```{r}
+lapply(1:8,function(i){chisq.test(percentage_distribution(motivation[,c("value","regionl1")])[i,])})
+percentage_distribution(motivation[,c("value","regionl1")])
+```
+
+## Frequency of contribution
+```{r}
+data[,"frequency.contribution"]<-ordered(data[,"frequency.contribution"],
+                                         c("Hourly","Daily","Weekly","Monthly"))
+```
+
+```{r}
+table(data[,"frequency.contribution"])
+chisq.test(table(data[,"frequency.contribution"]))
+```
+
+Does frequency of contribution vary across gender? No.
+```{r}
+chisq.test(table(data[,c("frequency.contribution","gender")]))
+percentage_distribution(data[,c("frequency.contribution","gender")])
+```
+
+
+Does frequency of contribution vary across regions? No.
+```{r}
+chisq.test(table(data[,c("frequency.contribution","regionl1")]))
+percentage_distribution(data[,c("frequency.contribution","regionl1")])
+```
+
+## Selection of projects
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+selection<-data[,c(11:16,27,30)]
+selection[,1:6]<-lapply(selection[,1:6],function(X) {ordered(X,levels=c("Very important","Important","Neutral","Less important","Not at all important"))})
+for(i in 1:6){
+  levels(selection[,i])<-c("Important","Important","Neutral","Not important","Not important")
+}
+```
+
+```{r}
+chisq.test(table(selection[,"selection.how.software.is.build"])[c(1,3)])
+table(selection[,"selection.how.software.is.build"])
+
+chisq.test(table(selection[,"selection.project.goal.align"])[c(1,3)])
+table(selection[,"selection.project.goal.align"])
+
+chisq.test(table(selection[,"selection.friends.contribute"])[c(1,3)])
+table(selection[,"selection.friends.contribute"])
+
+chisq.test(table(selection[,"selection.project.welcoming"])[c(1,3)])
+table(selection[,"selection.project.welcoming"])
+
+chisq.test(table(selection[,"selection.easy.to.join"])[c(1,3)])
+table(selection[,"selection.easy.to.join"])
+
+chisq.test(table(selection[,"selection.saw.on.social.media"])[c(1,3)])
+table(selection[,"selection.saw.on.social.media"])
+```
+
+Does the criteria for the selection of projects vary across gender? Partial. Yes: friends.contribute.
+```{r, warning=FALSE}
+lapply(1:6,function(X){chisq.test(table(selection[,c(X,7)])[c(1,3),])})
+lapply(1:6,function(X){percentage_distribution(selection[,c(X,7)])})
+```
+
+Does the criteria for the selection of projects vary across regions? No.
+```{r, warning=FALSE}
+lapply(1:6,function(X){chisq.test(table(selection[,c(X,8)])[c(1,3),])})
+lapply(1:6,function(X){percentage_distribution(selection[,c(X,8)])})
+```
+
+## Continue participation
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+continue<-data[,c(17:22,27,30)]
+continue[,1:6]<-lapply(continue[,1:6],function(X) {ordered(X,levels=c("Very important","Important","Neutral","Less important","Not at all important"))})
+for(i in 1:6){
+  levels(continue[,i])<-c("Important","Important","Neutral","Not important","Not important")
+}
+```
+
+```{r}
+table(continue[,"continue.interaction.with.welcoming.contributors"])
+chisq.test(table(continue[,"continue.interaction.with.welcoming.contributors"])[c(1,3)])
+
+table(continue[,"continue.connects.with.people.worldwide"])
+chisq.test(table(continue[,"continue.connects.with.people.worldwide"])[c(1,3)])
+
+table(continue[,"continue.low.stress.levels"])
+chisq.test(table(continue[,"continue.low.stress.levels"])[c(1,3)])
+
+table(continue[,"continue.exciting.tasks"])
+chisq.test(table(continue[,"continue.exciting.tasks"])[c(1,3)])
+
+table(continue[,"continue.challenging.tasks"])
+chisq.test(table(continue[,"continue.exciting.tasks"])[c(1,3)])
+
+table(continue[,"continue.being.paid"])
+chisq.test(table(continue[,"continue.being.paid"])[c(1,3)])
+```
+
+Does the criteria for continued participation in projects vary across gender? Partial. Continue.being.paid
+```{r}
+lapply(1:6,function(X){chisq.test(percentage_distribution(continue[,c(X,7)])[c(1,3),])})
+lapply(1:6,function(X){percentage_distribution(continue[,c(X,7)])})
+
+```
+
+Does the criteria for continued participation in projects vary across regions? Yes.
+```{r}
+lapply(1:6,function(X){chisq.test(percentage_distribution(continue[,c(X,8)])[c(1,3),])})
+lapply(1:6,function(X){percentage_distribution(continue[,c(X,8)])})
+```
+
+## Importance of same geographic region
+```{r include=FALSE, echo=FALSE, warning=FALSE}
+data[,"important.same.geographic.region"]<-ordered(data[,"important.same.geographic.region"],c("Very Important","Important","Neutral","Less important","Not at all important"))
+levels(data[,"important.same.geographic.region"])<-c("Important","Important","Neutral","Not important","Not important")
+```
+
+Same geographic region is important. 
+```{r}
+round(prop.table(table(data[,"important.same.geographic.region"]))*100,0)
+chisq.test(round(prop.table(table(data[,"important.same.geographic.region"]))*100,0)[c(1,3)])
+```
+How important is it working with people from same geographic region across gender? No.
+```{r}
+chisq.test(percentage_distribution(data[,c("important.same.geographic.region","gender")])[c(1,3),])
+percentage_distribution(data[,c("important.same.geographic.region","gender")])
+
+```
+How important is it working with people from same geographic region across regions? Yes.
+```{r}
+chisq.test(percentage_distribution(data[,c("important.same.geographic.region","regionl1")])[c(1,3),])
+percentage_distribution(data[,c("important.same.geographic.region","regionl1")])
+```
+
+## Challenge working with people who speak different language
+```{r include=FALSE, echo=FALSE, warning=FALSE}
+data[,"challenging.speak.different.language"]<-ordered(data[,"challenging.speak.different.language"],c("Very challenging","Challenging","Neutral","Less challenging","Not at all challenging"))
+levels(data[,"challenging.speak.different.language"])<-c("Challenging","Challenging","Neutral","Not challenging","Not challenging")
+```
+Not conclusive.
+```{r}
+chisq.test(round(prop.table(table(data[,"challenging.speak.different.language"]))*100,0)[c(1,3)])
+round(prop.table(table(data[,"challenging.speak.different.language"]))*100,0)
+```
+How challenging is it to work with people who speak different language across gender? No difference.
+```{r}
+chisq.test(percentage_distribution(data[,c("challenging.speak.different.language","gender")])[c(1,3),])
+percentage_distribution(data[,c("challenging.speak.different.language","gender")])
+```
+How challenging is working with people who speak different language across regions? Differences exist.
+```{r}
+chisq.test(percentage_distribution(data[,c("challenging.speak.different.language","regionl1")])[c(1,3),])
+percentage_distribution(data[,c("challenging.speak.different.language","regionl1")])
+```
+
+## How helpful are translation tools?
+```{r include=FALSE, echo=FALSE, warning=FALSE}
+data[,"helpful.translation.tools"]<-ordered(data[,"helpful.translation.tools"],c("Very helpful","Helpful","Neutral","Less helpful","Not at all helpful"))
+levels(data[,"helpful.translation.tools"])<-c("Helpful","Helpful","Neutral","Not helpful","Not helpful")
+```
+
+Not conclusive
+```{r}
+chisq.test(round(prop.table(table(data[,"helpful.translation.tools"]))*100,0))
+round(prop.table(table(data[,"helpful.translation.tools"]))*100,0)
+```
+How helpful are translation tools across gender? Women find it more useful than men.
+```{r}
+chisq.test(percentage_distribution(data[,c("helpful.translation.tools","gender")])[c(1,3),])
+percentage_distribution(data[,c("helpful.translation.tools","gender")])
+```
+How helpful are translation tools across regions? No difference
+```{r}
+chisq.test(percentage_distribution(data[,c("helpful.translation.tools","regionl1")])[c(1,3),])
+percentage_distribution(data[,c("helpful.translation.tools","regionl1")])
+```
+
+## Importance of same gender identity
+```{r include=FALSE, echo=FALSE, warning=FALSE}
+data[,c("important.same.gender.identity")]<-ordered(data[,c("important.same.gender.identity")],c("Important","Neutral","Less important","Not at all important"))
+levels(data[,c("important.same.gender.identity")])<- c("Important","Neutral","Not important","Not important")
+```
+
+Not important
+```{r}
+chisq.test(table(data[,c("important.same.gender.identity")])[c(1,3)])
+table(data[,c("important.same.gender.identity")])
+```
+
+How important is same gender identity across genders? Less important for men
+```{r}
+chisq.test(percentage_distribution(data[,c("important.same.gender.identity","gender")])[c(1,3),])
+percentage_distribution(data[,c("important.same.gender.identity","gender")])
+```
+
+How important is same gender identity across regions? Different for different regions.
+```{r}
+chisq.test(percentage_distribution(data[,c("important.same.gender.identity","regionl1")])[c(1,3),])
+percentage_distribution(data[,c("important.same.gender.identity","regionl1")])
+
+```
