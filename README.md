@@ -1,1 +1,1 @@
-# GSD_data_analysis
+# Globally distributed software projects: Reasons to adopt and abandon
