@@ -18,7 +18,7 @@ percentage_distribution <-function(dat){
 return(round(prop.table(table(dat),2)*100,0))
 }
 
-setwd("/Users/ayushirastogi/Documents/GitHub/GSD_data_analysis")  # set current working directory
+setwd("")  # set current working directory
 
 data<-read.csv("responses.csv",header=T,stringsAsFactors=T,na.strings = c(""," ")) # import file with headers and set strings as factors
 
